@@ -1,70 +1,133 @@
-# Getting Started with Create React App
+# Override .env variables when building a Docker container
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+This guide explains how to set up a React app with Docker and Nginx, along with the ability to override environment variables during the build process.
 
-## Available Scripts
+## Project Structure
 
-In the project directory, you can run:
+Here's how the project structure might look like:
 
-### `npm start`
+```
+my-react-app/
+├── .env
+├── Dockerfile
+├── docker-compose.yml
+├── nginx.conf
+└── src/
+    └── ...
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Steps
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### 1. Create a `.env` File
 
-### `npm test`
+Create a `.env` file in the root directory of your React app to store default environment variables.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+```env
+# .env
+REACT_APP_API_URL=https://default-api.example.com
+```
 
-### `npm run build`
+### 2. Create a `Dockerfile`
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+Create a `Dockerfile` in the root directory with the following content:
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+```Dockerfile
+# Use an official Node runtime as a parent image
+FROM node:14 as build
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+# Set the working directory in the container
+WORKDIR /app
 
-### `npm run eject`
+# Copy package.json and package-lock.json
+COPY package*.json ./
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+# Install dependencies
+RUN npm install
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+# Copy the current directory contents into the container
+COPY . .
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+# Build the React app with overridden environment variables
+ARG REACT_APP_API_URL
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+RUN npm run build
 
-## Learn More
+# Use Nginx for serving the build
+FROM nginx:alpine
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+# Copy Nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+# Copy build files from build stage
+COPY --from=build /app/build /usr/share/nginx/html
 
-### Code Splitting
+# Expose port 80
+EXPOSE 80
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+# Start Nginx server
+CMD ["nginx", "-g", "daemon off;"]
+```
 
-### Analyzing the Bundle Size
+### 3. Create a `docker-compose.yml` File
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+Create a `docker-compose.yml` file in the root directory:
 
-### Making a Progressive Web App
+```yaml
+version: '3'
+services:
+  web:
+    build: 
+      context: .
+      args:
+        REACT_APP_API_URL: ${REACT_APP_API_URL}
+    ports:
+      - "80:80"
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+### 4. Create an `nginx.conf` File
 
-### Advanced Configuration
+Create an `nginx.conf` file for Nginx configuration:
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+```nginx
+server {
+  listen 80;
 
-### Deployment
+  location / {
+    root /usr/share/nginx/html;
+    index index.html index.htm;
+    try_files $uri $uri/ /index.html;
+  }
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+  error_page   500 502 503 504  /50x.html;
+    location = /50x.html {
+        root   /usr/share/nginx/html;
+  }
+}
+```
 
-### `npm run build` fails to minify
+### 5. Build and Run the Docker Container
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+To build and run the Docker container, you can use the following commands:
+
+```bash
+# Build the Docker image
+docker-compose build
+
+# Run the Docker container
+docker-compose up -d
+```
+
+This will build your React app with the overridden `.env` variable (`REACT_APP_API_URL`) and run it in a Docker container served by Nginx.
+
+### Result
+
+REACT_APP_API_URL running the app locally:
+<p align="center">
+  <img src="./docs/img/app-in-local.png" alt="running the app locally" width="500">
+</p>
+
+REACT_APP_API_URL running the app in the container:
+<p align="center">
+  <img src="./docs/img/app-in-container.png" alt="running the app in the container" width="500">
+</p>
