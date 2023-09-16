@@ -4,6 +4,8 @@ services:
     build:
       context: .
       args:
+        # REACT_APP_API_URL must be set in an environment variable
+        # example: export REACT_APP_API_URL=https://override-api.example.com
         REACT_APP_API_URL: ${REACT_APP_API_URL}
     ports:
       - "80:80"
